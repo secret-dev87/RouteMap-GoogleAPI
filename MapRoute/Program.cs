@@ -56,6 +56,8 @@ namespace MapRoute
                         CleanAddress = (string)reader["CleanAddress"],
                         Lat = Convert.ToDouble(reader["Lat"]),
                         Lon = Convert.ToDouble(reader["Lon"]),
+                        ResidenceCity = (string)reader["Residence_City_USPS"],
+                        ResidenceState = (string)reader["Residence_State"],
                         WalkOrder = 0,
                     });
                 }
@@ -64,43 +66,39 @@ namespace MapRoute
             return addresses;
         }
 
-        private static async Task ComputeRouteMap(int subIndex, List<Address> addresses)
+        private static async Task<Address> ComputeRouteMap(Address originAddr, int subIndex, List<Address> addresses)
         {
             string apiKey = "AIzaSyCHeJyeuixXnqdWyn5018h7DEclejyk9u8";
 
-            var originPoint = addresses.First();
-            var destinationPoint = addresses.Last();
-
             var origin = new Waypoint
             {
-                location = new Location { latLng = new LatLng { latitude = originPoint.Lat, longitude = originPoint.Lon } }
-            };
-
-            var destination = new Waypoint
-            {
-                location = new Location { latLng = new LatLng { latitude = destinationPoint.Lat, longitude = destinationPoint.Lon } }
+                //location = new Location { latLng = new LatLng { latitude = originAddr.Lat, longitude = originAddr.Lon } },
+                address = $"{originAddr.CleanAddress}, {originAddr.ResidenceCity}, {originAddr.ResidenceState}"
             };
 
             var intermediates = new List<Waypoint>();
+            var count = addresses.Count;
 
             foreach (var address in addresses)
             {
                 intermediates.Add(new Waypoint
                 {
-                    location = new Location { latLng = new LatLng { latitude = address.Lat, longitude = address.Lon } }
+                    //location = new Location { latLng = new LatLng { latitude = address.Lat, longitude = address.Lon } },
+                    address = $"{address.CleanAddress}, {address.ResidenceCity}, {address.ResidenceState}"
                 });
             }
 
             RouteRequest request = new RouteRequest
             {
                 origin = origin,
-                destination = destination,
+                destination = origin,
                 optimizeWaypointOrder = true,
                 travelMode = "WALK",
                 intermediates = intermediates
             };
 
             var requestBody = JsonConvert.SerializeObject(request);
+            Address newOriginAddr = null;
 
             using (HttpClient client = new HttpClient())
             {
@@ -121,13 +119,19 @@ namespace MapRoute
                 {
                     var orders = result.routes[0].optimizedIntermediateWaypointIndex;
 
-                    for (int i = 0; i < orders.Count; i++)
+                    for (int i = 0; i < count; i++)
                     {
                         int walkorder = subIndex * 25 + orders[i];
+                        if (orders[i] == count-1)
+                        {
+                            newOriginAddr = addresses[i];
+                        }
                         RunInsertUpdateDistictAddressWalkListOrder(addresses[i].ID, walkorder);
                     }
                 }
             }
+
+            return newOriginAddr;
         }
 
         static async Task Main(string[] args)
@@ -135,15 +139,15 @@ namespace MapRoute
             var addresses = ReadAddresses();
 
             var count = addresses.Count;
-
             var subCount = count / 25 + (count % 25 == 0 ? 0 : 1);
+            var originAddr = addresses[0];
 
             for (int i = 0; i < subCount; i++)
             {
                 List<Address> subAddresses = i == subCount - 1 ?
                     addresses.GetRange(i * 25, count - i * 25) :
                     addresses.GetRange(i * 25, 25);
-                await ComputeRouteMap(i, subAddresses);
+                originAddr = await ComputeRouteMap(originAddr, i, subAddresses);
             }
         }
     }
