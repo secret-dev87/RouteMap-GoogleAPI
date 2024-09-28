@@ -105,7 +105,7 @@ namespace MapRoute
                 string url = $"https://routes.googleapis.com/directions/v2:computeRoutes?key={apiKey}";
 
                 var requestContent = new StringContent(requestBody, Encoding.UTF8, "application/json");
-                client.DefaultRequestHeaders.Add("X-Goog-FieldMask", "*");
+                client.DefaultRequestHeaders.Add("X-Goog-FieldMask", "routes.optimizedIntermediateWaypointIndex");
 
                 HttpResponseMessage response = await client.PostAsync(url, requestContent);
 
@@ -121,12 +121,12 @@ namespace MapRoute
 
                     for (int i = 0; i < count; i++)
                     {
-                        int walkorder = subIndex * 25 + orders[i];
-                        if (orders[i] == count-1)
+                        int walkorder = subIndex * 25 + i;
+                        if (i == count - 1)
                         {
-                            newOriginAddr = addresses[i];
+                            newOriginAddr = addresses[orders[i]];
                         }
-                        RunInsertUpdateDistictAddressWalkListOrder(addresses[i].ID, walkorder);
+                        RunInsertUpdateDistictAddressWalkListOrder(addresses[orders[i]].ID, walkorder);
                     }
                 }
             }
